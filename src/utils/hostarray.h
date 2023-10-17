@@ -3,6 +3,7 @@
 #include <vector>
 #include <exception>
 #include <cstring>
+#include <limits>
 
 namespace troy { namespace util {
     

@@ -1,0 +1,110 @@
+#include <vector>
+#include <complex>
+
+#include <pybind11/pybind11.h>
+#include <pybind11/stl.h>
+#include <pybind11/complex.h>
+#include "../src/SchemeCuda.cuh"
+
+namespace py = pybind11;
+
+typedef std::complex<double> complex;
+
+using namespace cinder::george;
+
+PYBIND11_MODULE(pycinder, m) {
+    // m.doc() = "cinder library";
+    // m.def("add", &add, "add two numbers");
+
+    // py::class_<Foo>(m, "Foo")
+    //     .def(py::init<int>())
+    //     .def("get", &Foo::get);
+
+    py::class_<Plaintext>(m, "Plaintext")
+        .def("level", [](const Plaintext& p) {return p.l;})
+        .def("copy", [](const Plaintext& p) {
+            return Plaintext(p);
+        });
+
+    py::class_<Ciphertext>(m, "Ciphertext")
+        .def("level", [](const Ciphertext& p) {return p.l;})
+        .def("copy", [](const Ciphertext& p) {
+            return Ciphertext(p);
+        })
+        .def("cpu", &Ciphertext::cpu)
+        .def(py::init<const std::vector<uint64>&>());
+
+    py::class_<SecretKey>(m, "SecretKey")
+        .def(py::init<Context&>());
+
+    py::class_<Context>(m, "Context")
+        .def(py::init<long, long, long, long, long, double>())
+        .def(py::init<long, long, long, long, long, double, const std::vector<uint64>&, const std::vector<uint64>&>())
+        .def("get_coefficient_moduli", [](Context& context) {
+            std::vector<uint64> q; for (int i=0; i<context.L; i++) q.push_back(context.qVec[i]);
+            std::vector<uint64> p; for (int i=0; i<context.K; i++) p.push_back(context.pVec[i]);
+            return std::vector<std::vector<uint64>>{q, p};
+        });
+
+    py::class_<Scheme>(m, "Scheme")
+        .def(py::init<Context&>())
+        .def("encode", [](Scheme& self, std::vector<complex> vec, int level) {
+            complex* d = new complex[vec.size()];
+            for (int i=0; i<vec.size(); i++) d[i] = vec[i];
+            Plaintext p = self.encode(d, vec.size(), level);
+            delete[] d;
+            return p;
+        })
+        .def("decode", [](Scheme& self, const Plaintext& p) {
+            complex* d = self.decode(p);
+            std::vector<complex> ret; ret.reserve(self.context.Nh);
+            for (int i=0; i<self.context.Nh; i++) ret.push_back(d[i]);
+            delete[] d;
+            return ret;
+        })
+        .def("generate_enc_key", &Scheme::generateEncKey)
+        .def("receive_enc_key", &Scheme::receiveEncKey)
+        .def("generate_mult_key", &Scheme::generateMultKey)
+        .def("receive_mult_key", &Scheme::receiveMultKey)
+        .def("generate_conj_key", &Scheme::generateConjKey)
+        .def("receive_conj_key", &Scheme::receiveConjKey)
+        .def("generate_left_rotate_key", &Scheme::generateLeftRotKey)
+        .def("receive_left_rotate_key", &Scheme::receiveLeftRotKey)
+        .def("generate_left_rotate_keys", &Scheme::generateLeftRotKeys)
+        .def("generate_right_rotate_keys", &Scheme::generateRightRotKeys)
+        .def("receive_left_rotate_keys", &Scheme::receiveLeftRotKeys)
+        .def("encrypt", &Scheme::encryptMsg)
+        .def("decrypt", &Scheme::decryptMsg)
+        .def("negate", &Scheme::negate)
+        .def("negate_inplace", &Scheme::negateAndEqual)
+        .def("add", &Scheme::add)
+        .def("add_inplace", &Scheme::addAndEqual)
+        .def("add_plain", &Scheme::addPlaintext)
+        .def("add_plain_inplace", &Scheme::addPlaintextAndEqual)
+        .def("sub", &Scheme::sub)
+        .def("sub_inplace", &Scheme::subAndEqual)
+        .def("multiply", &Scheme::mult)
+        .def("multiply_inplace", &Scheme::multAndEqual)
+        .def("square", &Scheme::square)
+        .def("square_inplace", &Scheme::squareAndEqual)
+        .def("multiply_plain", &Scheme::multByPlaintext)
+        .def("multiply_plain_inplace", &Scheme::multByPlaintextAndEqual)
+        .def("multiply_double", &Scheme::multByConst)
+        .def("rescale_by", &Scheme::reScaleBy)
+        .def("rescale_by_inplace", &Scheme::reScaleByAndEqual)
+        .def("rescale_to", &Scheme::reScaleTo)
+        .def("rescale_to_inplace", &Scheme::reScaleToAndEqual)
+        .def("mod_down_by", &Scheme::modDownByCiphertext)
+        .def("mod_down_by_inplace", &Scheme::modDownByAndEqualCiphertext)
+        .def("mod_down_to", &Scheme::modDownToCiphertext)
+        .def("mod_down_to_inplace", &Scheme::modDownToAndEqualCiphertext)
+        .def("mod_down_plain_by", &Scheme::modDownByPlaintext)
+        .def("mod_down_plain_by_inplace", &Scheme::modDownByAndEqualPlaintext)
+        .def("mod_down_plain_to", &Scheme::modDownToPlaintext)
+        .def("mod_down_plain_to_inplace", &Scheme::modDownToAndEqualPlaintext)
+        .def("left_rotate", &Scheme::leftRotate)
+        .def("left_rotate_inplace", &Scheme::leftRotateAndEqual)
+        .def("right_rotate", &Scheme::rightRotate)
+        .def("right_rotate_inplace", &Scheme::rightRotateAndEqual)
+        ;
+}
